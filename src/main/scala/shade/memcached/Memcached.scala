@@ -94,6 +94,28 @@ trait Memcached extends java.io.Closeable {
   def getAndTransform[T](key: String, exp: Duration)(cb: Option[T] => T)(implicit codec: Codec[T]): Future[Option[T]]
 
   /**
+   * Increments a value for a given key, if the key doesn't already exist sets default value.
+   *
+   * The expiry time can be Duration.Inf (infinite duration).
+   *
+   */
+  def incr(key: String, by: Long, defaultValue: Long, exp: Duration): Future[Long]
+
+  def awaitIncr(key: String, by: Long, defaultValue: Long, exp: Duration): Long =
+    Await.result(incr(key, by, defaultValue, exp), Duration.Inf)
+
+  /**
+   * Decrements a value for a given key, if the key doesn't already exist sets default value.
+   *
+   * The expiry time can be Duration.Inf (infinite duration).
+   *
+   */
+  def decr(key: String, by: Long, defaultValue: Long, exp: Duration): Future[Long]
+
+  def awaitDecr(key: String, by: Long, defaultValue: Long, exp: Duration): Long =
+    Await.result(decr(key, by, defaultValue, exp), Duration.Inf)
+
+  /**
    * Shuts down the cache instance, performs any additional cleanups necessary.
    */
   def close()

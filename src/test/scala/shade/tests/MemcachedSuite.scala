@@ -75,6 +75,41 @@ class MemcachedSuite extends FunSuite with MemcachedTestHelpers {
     }
   }
 
+  test("incrdecr") {
+    withCache("incrdecr") { cache =>
+      assert(cache.awaitGet[Int]("hello") === None)
+
+      cache.awaitSet("hello", "123", 1.seconds)(StringBinaryCodec)
+      assert(cache.awaitGet[String]("hello")(StringBinaryCodec) === Some("123"))
+
+      cache.awaitIncr("hello", 1, 0, 1.second)
+      assert(cache.awaitGet[String]("hello")(StringBinaryCodec) === Some("124"))
+
+      cache.awaitDecr("hello", 1, 0, 1.second)
+      assert(cache.awaitGet[String]("hello")(StringBinaryCodec) === Some("123"))
+
+      Thread.sleep(3000)
+
+      assert(cache.awaitGet[String]("hello")(StringBinaryCodec) === None)
+    }
+  }
+
+  test("incrdecr_zero") {
+    withCache("incrdecr_zero") { cache =>
+      assert(cache.awaitGet[String]("hello")(StringBinaryCodec) === None)
+
+      cache.awaitIncr("hello", 1, 0, 1.second)
+      assert(cache.awaitGet[String]("hello")(StringBinaryCodec) === Some("0"))
+
+      cache.awaitIncr("hello", 1, 0, 1.second)
+      assert(cache.awaitGet[String]("hello")(StringBinaryCodec) === Some("1"))
+
+      Thread.sleep(3000)
+
+      assert(cache.awaitGet[String]("hello")(StringBinaryCodec) === None)
+    }
+  }
+
   test("delete") {
     withCache("delete") { cache =>
       cache.awaitDelete("hello")

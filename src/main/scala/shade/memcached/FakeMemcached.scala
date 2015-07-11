@@ -56,4 +56,8 @@ class FakeMemcached(context: ExecutionContext) extends Memcached {
   }
 
   private[this] val cache = InMemoryCache(context)
+
+  override def incr(key: String, by: Long, defaultValue: Long, exp: Duration): Future[Long] = ???
+
+  override def decr(key: String, by: Long, defaultValue: Long, exp: Duration): Future[Long] = ???
 }

@@ -210,15 +210,15 @@ class SpyMemcachedIntegration(cf: ConnectionFactory, addrs: Seq[InetSocketAddres
 
     val op: Operation = opFact.store(StoreType.set, key, flags, expiryToSeconds(exp).toInt, data, new StoreOperation.Callback {
       def receivedStatus(opStatus: OperationStatus) {
-        if (statusTranslation.isDefinedAt(opStatus))
-          statusTranslation(opStatus) match {
-            case CASSuccessStatus =>
-            // nothing
-            case failure =>
-              result.tryComplete(Success(FailedResult(key, failure)))
-          }
+          if (statusTranslation.isDefinedAt(opStatus))
+            statusTranslation(opStatus) match {
+              case CASSuccessStatus =>
+              // nothing
+              case failure =>
+                result.tryComplete(Success(FailedResult(key, failure)))
+            }
 
-        else
+          else
           throw new UnhandledStatusException(
             "%s(%s)".format(opStatus.getClass, opStatus.getMessage))
       }
@@ -374,6 +374,52 @@ class SpyMemcachedIntegration(cf: ConnectionFactory, addrs: Seq[InetSocketAddres
     mconn.enqueueOperation(key, op)
     prepareFuture(key, op, promise, timeout)
   }
+
+
+  def realAsyncMutate(
+                       key: String,
+                       by: Long,
+                       opIncr: Boolean,
+                       defaultVal: Long,
+                       exp: Duration,
+                       timeout: FiniteDuration)(implicit ec: ExecutionContext): Future[Result[Option[Long]]] = {
+    val promise = Promise[Result[Option[Long]]]()
+    val result = new MutablePartialResult[Option[Long]]
+
+    val op: Operation = opFact.mutate(
+      if (opIncr) Mutator.incr else Mutator.decr, key, by, defaultVal, expiryToSeconds(exp).toInt, new StoreOperation.Callback {
+      def receivedStatus(opStatus: OperationStatus) {
+        if (!opStatus.isSuccess) {
+          if (statusTranslation.isDefinedAt(opStatus))
+            statusTranslation(opStatus) match {
+              case CASExistsStatus =>
+                result.tryComplete(Success(SuccessfulResult(key, None)))
+              case CASSuccessStatus =>
+              // nothing
+              case failure =>
+                result.tryComplete(Success(FailedResult(key, failure)))
+            }
+          else
+            throw new UnhandledStatusException(
+              "%s(%s)".format(opStatus.getClass, opStatus.getMessage))
+        } else {
+          result.tryComplete(Success(SuccessfulResult(key, Some(opStatus.getMessage.toLong))))
+        }
+      }
+      def gotData(key: String, value: Long) {
+        result.tryComplete(Success(SuccessfulResult(key, Some(value))))
+      }
+
+      def complete() {
+        result.completePromise(key, promise)
+      }
+    })
+
+    mconn.enqueueOperation(key, op)
+    prepareFuture(key, op, promise, timeout)
+  }
+
+
 
   protected final def prepareFuture[T](key: String, op: Operation, promise: Promise[Result[T]], atMost: FiniteDuration)(implicit ec: ExecutionContext): Future[Result[T]] = {
     val cancelable = scheduler.scheduleOnce(atMost, {

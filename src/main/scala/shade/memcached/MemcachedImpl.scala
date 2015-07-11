@@ -220,6 +220,31 @@ class MemcachedImpl(config: Configuration, ec: ExecutionContext) extends Memcach
       case (oldValue, newValue) => oldValue
     }
 
+
+  /**
+   */
+  def incr(key: String, by: Long, defaultValue: Long, exp: Duration): Future[Long] =
+    instance.realAsyncMutate(withPrefix(key), by, opIncr = true, defaultValue, exp, config.operationTimeout) map {
+      case SuccessfulResult(givenKey, Some(value)) =>
+        value
+      case SuccessfulResult(givenKey, None) =>
+        throwExceptionOn(FailedResult(givenKey, IllegalCompleteStatus))
+      case failure: FailedResult =>
+        throwExceptionOn(failure)
+    }
+
+  /**
+   */
+  def decr(key: String, by: Long, defaultValue: Long, exp: Duration): Future[Long] =
+    instance.realAsyncMutate(withPrefix(key), by, opIncr = false, defaultValue, exp, config.operationTimeout) map {
+      case SuccessfulResult(givenKey, Some(value)) =>
+        value
+      case SuccessfulResult(givenKey, None) =>
+        throwExceptionOn(FailedResult(givenKey, IllegalCompleteStatus))
+      case failure: FailedResult =>
+        throwExceptionOn(failure)
+    }
+
   def close() {
     instance.shutdown(3, TimeUnit.SECONDS)
   }
